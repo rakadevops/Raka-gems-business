@@ -1,0 +1,3 @@
+
+[functions.raka-transaction-intake]
+verify_jwt = false
