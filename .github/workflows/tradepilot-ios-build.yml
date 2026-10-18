@@ -42,37 +42,47 @@ jobs:
       - name: Require Expo token
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "::error::Add EXPO_TOKEN in repository Actions secrets before starting a cloud build."
             exit 1
           fi
-          if [ -z "$EAS_PROJECT_ID" ]; then
-            echo "::error::Add EAS_PROJECT_ID for the EAS project that owns TradePilot AI."
-            exit 1
-          fi
-          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("app.json","utf8"));p.expo.extra={...(p.expo.extra||{}),eas:{...(p.expo.extra?.eas||{}),projectId:process.env.EAS_PROJECT_ID}};fs.writeFileSync("app.json",JSON.stringify(p,null,2)+"\n");'
 
-      - name: Configure iOS credentials and build
+      - name: Create or link EAS project
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
+        run: |
+          npx eas-cli@latest whoami
+          npx eas-cli@latest init --account rakadevops --non-interactive --json
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("app.json","utf8"));const id=p.expo?.extra?.eas?.projectId;if(!id){console.error("EAS project ID was not added to app.json");process.exit(1)}console.log("EAS project linked:",id);'
+
+      - name: Build iOS preview
+        if: ${{ github.event.inputs.target == 'preview' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest build --platform ios --profile preview --non-interactive
+
+      - name: Validate TestFlight secrets
+        if: ${{ github.event.inputs.target == 'testflight' }}
+        env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
-          BUILD_TARGET: ${{ github.event.inputs.target }}
         run: |
-          npx eas-cli@latest whoami
-          if [ "$BUILD_TARGET" = "testflight" ]; then
-            for name in APPLE_ID ASC_APP_ID APPLE_TEAM_ID EXPO_APPLE_APP_SPECIFIC_PASSWORD; do
-              if [ -z "${!name}" ]; then
-                echo "::error::Missing required repository secret: $name"
-                exit 1
-              fi
-            done
-            npx eas-cli@latest build --platform ios --profile testflight --non-interactive --auto-submit
-          else
-            npx eas-cli@latest build --platform ios --profile preview --non-interactive
-          fi
+          for name in APPLE_ID ASC_APP_ID APPLE_TEAM_ID EXPO_APPLE_APP_SPECIFIC_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Build and submit to TestFlight
+        if: ${{ github.event.inputs.target == 'testflight' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+        run: npx eas-cli@latest build --platform ios --profile testflight --non-interactive --auto-submit
