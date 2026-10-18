@@ -240,6 +240,16 @@ export default function App() {
         ? "Will be saved to Airtable only after you confirm. The app reports success only after read-back verification."
         : "PREVIEW ONLY — sale/expense saving is not enabled yet."
     ].filter(Boolean).join("\n");
+    if (typeof window !== "undefined") {
+      const canSave = transactionType === "Purchase" || transactionType === "Payment";
+      const confirmation = window.confirm(
+        details + "\\n\\n" + (canSave
+          ? "Choose OK to save this transaction to Raka Gems. It will only be reported as saved after server-side checks and Airtable read-back verification."
+          : "This transaction type is still preview-only and will not be saved.")
+      );
+      if (confirmation && canSave) void saveTransaction();
+      return;
+    }
     Alert.alert("Review transaction", details, [
       { text: "Edit", style: "cancel" },
       { text: transactionType === "Purchase" || transactionType === "Payment" ? (savingTransaction ? "Saving…" : "Save to Raka Gems") : "Close", onPress: transactionType === "Purchase" || transactionType === "Payment" ? saveTransaction : previewOnly, style: "default" }
@@ -396,7 +406,7 @@ export default function App() {
             <TextInput value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
-            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : "Review transaction  →"}</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : (transactionType === "Purchase" || transactionType === "Payment" ? "Review & Save transaction  →" : "Review transaction  →")}</Text></TouchableOpacity>
             <Text style={styles.disclaimer}>Purchases and payments can be saved to Airtable after review. Sales and expenses remain disabled.</Text>
           </View>
         ) : null}
