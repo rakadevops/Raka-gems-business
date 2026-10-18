@@ -11,6 +11,7 @@ on:
       - "src/**"
       - "tests/**"
       - ".github/workflows/tradepilot-checks.yml"
+      - ".github/workflows/tradepilot-ios-build.yml"
   push:
     branches: [feature/tradepilot-ios-scaffold]
     paths:
@@ -19,6 +20,7 @@ on:
       - "package.json"
       - "tsconfig.json"
       - ".github/workflows/tradepilot-checks.yml"
+      - ".github/workflows/tradepilot-ios-build.yml"
 
 jobs:
   typecheck:
