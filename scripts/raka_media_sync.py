@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync stone media from Dropbox into the private Raka Gems Supabase bucket."""
+"""Copy Dropbox stone media into the private Raka Gems Supabase intake."""
 import base64
 import hashlib
 import json
@@ -37,16 +37,16 @@ def main():
  intake_secret = os.environ["RAKA_INTAKE_SECRET"]
  inbox = os.getenv("DROPBOX_INBOX_PATH", "/Raka_Gems_Inbox").rstrip("/")
 
- credentials = urllib.parse.urlencode({"grant_type": "refresh_token", "refresh_token": refresh_token}).encode()
- basic_auth = base64.b64encode(f"{app_key}:{app_secret}".encode()).decode()
- token_raw = request("https://api.dropbox.com/oauth2/token", credentials, {"Authorization": "Basic " + basic_auth, "Content-Type": "application/x-www-form-urlencoded"}, "POST")
+ form = urllib.parse.urlencode({"grant_type": "refresh_token", "refresh_token": refresh_token}).encode()
+ basic = base64.b64encode(f"{app_key}:{app_secret}".encode()).decode()
+ token_raw = request("https://api.dropbox.com/oauth2/token", form, {"Authorization": "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded"}, "POST")
  access_token = json.loads(token_raw)["access_token"]
- dropbox_headers = {"Authorization": "Bearer " + access_token, "Content-Type": "application/json"}
+ headers = {"Authorization": "Bearer " + access_token, "Content-Type": "application/json"}
 
- page = post_json(DROPBOX_API + "/files/list_folder", {"path": inbox, "recursive": True, "include_deleted": False, "limit": 2000}, dropbox_headers)
+ page = post_json(DROPBOX_API + "/files/list_folder", {"path": inbox, "recursive": True, "include_deleted": False, "limit": 2000}, headers)
  entries = list(page.get("entries", []))
     while page.get("has_more"):
- page = post_json(DROPBOX_API + "/files/list_folder/continue", {"cursor": page["cursor"]}, dropbox_headers)
+ page = post_json(DROPBOX_API + "/files/list_folder/continue", {"cursor": page["cursor"]}, headers)
  entries.extend(page.get("entries", []))
 
  uploaded = skipped = 0
@@ -69,7 +69,7 @@ def main():
 
  suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
  mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "heic": "image/heic", "mp4": "video/mp4", "m4v": "video/mp4", "mov": "video/quicktime", "webm": "video/webm"}.get(suffix)
-        if not mime:
+        if mime is None:
             print(f"SKIP unsupported media type: {path}")
  skipped += 1
             continue
@@ -82,8 +82,8 @@ def main():
         def field(key, value):
             return (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n{value}\r\n").encode()
 
- body = field("stone_id", stone_id) + field("idempotency_key", idempotency_key) + field("caption", f"Synced from Dropbox: {path}")
  safe_filename = filename.replace('"', "_").replace("\r", "_").replace("\n", "_")
+ body = field("stone_id", stone_id) + field("idempotency_key", idempotency_key) + field("caption", f"Synced from Dropbox: {path}")
  body += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{safe_filename}\"\r\nContent-Type: {mime}\r\n\r\n").encode()
  body += file_data + f"\r\n--{boundary}--\r\n".encode()
  raw = request(intake_url, body, {"Content-Type": f"multipart/form-data; boundary={boundary}", "x-raka-secret": intake_secret}, "POST")
