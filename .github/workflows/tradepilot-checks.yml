@@ -8,6 +8,8 @@ on:
       - "app.json"
       - "package.json"
       - "tsconfig.json"
+      - "src/**"
+      - "tests/**"
       - ".github/workflows/tradepilot-checks.yml"
   push:
     branches: [feature/tradepilot-ios-scaffold]
@@ -36,6 +38,9 @@ jobs:
 
       - name: Check TypeScript
         run: npm run typecheck
+
+      - name: Run validation tests
+        run: npm test
 
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
