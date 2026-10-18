@@ -1,0 +1,71 @@
+name: TradePilot iOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Choose an iOS build target"
+        required: true
+        type: choice
+        options:
+          - preview
+          - testflight
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build TradePilot iOS (${{ github.event.inputs.target }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Run validation tests
+        run: npm test
+
+      - name: Check Expo configuration
+        run: npx expo-doctor
+
+      - name: Require Expo token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add EXPO_TOKEN in repository Actions secrets before starting a cloud build."
+            exit 1
+          fi
+
+      - name: Configure iOS credentials and build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+          BUILD_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          npx eas-cli@latest whoami
+          if [ "$BUILD_TARGET" = "testflight" ]; then
+            for name in APPLE_ID ASC_APP_ID APPLE_TEAM_ID EXPO_APPLE_APP_SPECIFIC_PASSWORD; do
+              if [ -z "${!name}" ]; then
+                echo "::error::Missing required repository secret: $name"
+                exit 1
+              fi
+            done
+            npx eas-cli@latest build --platform ios --profile testflight --non-interactive --auto-submit
+          else
+            npx eas-cli@latest build --platform ios --profile preview --non-interactive
+          fi
