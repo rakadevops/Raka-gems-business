@@ -52,7 +52,7 @@ jobs:
             echo "::error::Add EAS_PROJECT_ID for the EAS project that owns TradePilot AI."
             exit 1
           fi
-          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("app.json","utf8"));p.expo.extra={...(p.expo.extra||{}),eas:{...(p.expo.extra?.eas||{}),projectId:process.env.EAS_PROJECT_ID}};fs.writeFileSync("app.json",JSON.stringify(p,null,2)+"\\n");'
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("app.json","utf8"));p.expo.extra={...(p.expo.extra||{}),eas:{...(p.expo.extra?.eas||{}),projectId:process.env.EAS_PROJECT_ID}};fs.writeFileSync("app.json",JSON.stringify(p,null,2)+"\n");'
 
       - name: Configure iOS credentials and build
         env:
