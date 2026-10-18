@@ -1,0 +1,32 @@
+name: Raka Gems media sync
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: raka-gems-media-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate sync script syntax
+        run: python -m py_compile scripts/raka_media_sync.py
+      - name: Sync Dropbox media to Supabase and Airtable
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+          RAKA_INTAKE_SECRET: ${{ secrets.RAKA_INTAKE_SECRET }}
+          RAKA_SUPABASE_FUNCTION_URL: https://husoqhevdwwirzbgjaex.supabase.co/functions/v1/raka-media-intake
+          DROPBOX_INBOX_PATH: /Raka_Gems_Inbox
+        run: python scripts/raka_media_sync.py
