@@ -60,11 +60,46 @@ export default function App() {
   const [purchasePrice, setPurchasePrice] = useState("");
   const [stoneWeight, setStoneWeight] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [transactionType, setTransactionType] = useState<"Purchase" | "Expense" | "Sale" | "Payment">("Purchase");
+  const [stoneDescription, setStoneDescription] = useState("");
+  const [stoneColour, setStoneColour] = useState("");
 
   const previewOnly = () => Alert.alert(
     "Not recorded yet",
-    "This is the first UI scaffold. Secure sign-in, database saving and read-back verification must be connected before this entry can be recorded."
+    "This is a local preview only. Nothing is saved to Supabase or Airtable. Secure sign-in, server-side validation and read-back verification must be connected before this entry can be recorded."
   );
+
+  const reviewTransaction = () => {
+    const amount = Number(purchasePrice);
+    const weight = Number(stoneWeight);
+    if (!supplier.trim()) {
+      Alert.alert("Supplier or counterparty needed", "Enter the person or business this transaction relates to.");
+      return;
+    }
+    if (!purchasePrice.trim() || !Number.isFinite(amount) || amount <= 0) {
+      Alert.alert("Check the amount", "Enter a valid amount greater than zero in LKR.");
+      return;
+    }
+    if (transactionType === "Purchase" && (!stoneWeight.trim() || !Number.isFinite(weight) || weight <= 0)) {
+      Alert.alert("Check the weight", "For a stone purchase, enter a carat weight greater than zero.");
+      return;
+    }
+    const details = [
+      "Type: " + transactionType,
+      "Counterparty: " + supplier.trim(),
+      stoneDescription.trim() ? "Stone: " + stoneDescription.trim() : "",
+      stoneColour.trim() ? "Colour: " + stoneColour.trim() : "",
+      stoneWeight.trim() ? "Weight: " + stoneWeight + " ct" : "",
+      "Amount: LKR " + amount.toLocaleString("en-LK"),
+      note.trim() ? "Notes: " + note.trim() : "",
+      "",
+      "PREVIEW ONLY — not saved to any database."
+    ].filter(Boolean).join("\\n");
+    Alert.alert("Review transaction", details, [
+      { text: "Edit", style: "cancel" },
+      { text: "Close", onPress: previewOnly }
+    ]);
+  };
 
   const screenTitle = tab === "Home" ? "Your trading desk" :
     tab === "Stones" ? "Stone inventory" :
@@ -153,7 +188,17 @@ export default function App() {
           <View style={styles.formCard}>
             <Text style={styles.formIntro}>Start with a message or enter the basics. AI-assisted extraction will be added after secure backend access is ready.</Text>
             <Text style={styles.fieldLabel}>TRANSACTION TYPE</Text>
-            <View style={styles.typeRow}><Pill>Purchase</Pill><Pill tone="muted">Expense</Pill><Pill tone="muted">Sale</Pill><Pill tone="muted">Payment</Pill></View>
+            <View style={styles.typeRow}>
+              {(["Purchase", "Expense", "Sale", "Payment"] as const).map((kind) => (
+                <TouchableOpacity key={kind} onPress={() => setTransactionType(kind)}>
+                  <Pill tone={transactionType === kind ? "green" : "muted"}>{kind}</Pill>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.fieldLabel}>STONE DESCRIPTION (OPTIONAL)</Text>
+            <TextInput value={stoneDescription} onChangeText={setStoneDescription} placeholder="e.g. rough blue sapphire" placeholderTextColor={colors.muted} style={styles.input} />
+            <Text style={styles.fieldLabel}>COLOUR (OPTIONAL)</Text>
+            <TextInput value={stoneColour} onChangeText={setStoneColour} placeholder="e.g. just blue" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>SUPPLIER / COUNTERPARTY</Text>
             <TextInput value={supplier} onChangeText={setSupplier} placeholder="e.g. supplier name" placeholderTextColor={colors.muted} style={styles.input} />
             <View style={styles.twoFields}>
@@ -162,7 +207,7 @@ export default function App() {
             </View>
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
-            <TouchableOpacity style={styles.primaryButton} onPress={previewOnly}><Text style={styles.primaryButtonText}>Review transaction  →</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction}><Text style={styles.primaryButtonText}>Review transaction  →</Text></TouchableOpacity>
             <Text style={styles.disclaimer}>Preview only. No financial record is saved in this build.</Text>
           </View>
         ) : null}
