@@ -30,7 +30,7 @@ const showAppMessage = (title: string, message: string) => {
 };
 
 
-type Tab = "Home" | "Stones" | "Add" | "Value Add" | "Accounts";
+type Tab = "Home" | "Stones" | "Add" | "Value Add" | "Accounts" | "AI Assistant";
 
 const NAV: { key: Tab; icon: string }[] = [
   { key: "Home", icon: "⌂" },
@@ -38,6 +38,7 @@ const NAV: { key: Tab; icon: string }[] = [
   { key: "Add", icon: "+" },
   { key: "Value Add", icon: "✧" },
   { key: "Accounts", icon: "≡" },
+  { key: "AI Assistant", icon: "✦" },
 ];
 
 const colors = {
@@ -167,6 +168,89 @@ export default function App() {
   const [mediaCaption, setMediaCaption] = useState("");
   const [mediaUploadStatus, setMediaUploadStatus] = useState("");
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [aiMessages, setAiMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
+    { role: "assistant", text: "I’m your Raka Gems assistant. Ask about a stone or transaction, upload a clear photo for visual observations, or use the buying calculator below. I only read records and prepare advice; I cannot save or change business records." }
+  ]);
+  const [aiDraft, setAiDraft] = useState("");
+  const [aiImageDataUrl, setAiImageDataUrl] = useState("");
+  const [aiImageName, setAiImageName] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiPurchase, setAiPurchase] = useState("");
+  const [aiSale, setAiSale] = useState("");
+  const [aiCosts, setAiCosts] = useState("");
+  const [aiWeight, setAiWeight] = useState("");
+  const [aiTargetPct, setAiTargetPct] = useState("100");
+
+  const chooseAiPhoto = () => {
+    if (!authSession || authSession.user.email?.trim().toLowerCase() !== OWNER_EMAIL) {
+      showAppMessage("Sign in required", "Sign in with the authorised Google account before using the AI assistant.");
+      return;
+    }
+    if (typeof document === "undefined") {
+      showAppMessage("Photo selection", "Open the Raka Gems web app in Safari to select a photo.");
+      return;
+    }
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/jpeg,image/png,image/webp";
+    picker.onchange = () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      if (file.size <= 0 || file.size > 5 * 1024 * 1024) {
+        showAppMessage("Photo not selected", "Choose a JPG, PNG or WebP photo smaller than 5 MiB.");
+        return;
+      }
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        showAppMessage("Unsupported photo", "Choose a JPG, PNG or WebP image.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAiImageDataUrl(String(reader.result || ""));
+        setAiImageName(file.name);
+      };
+      reader.onerror = () => showAppMessage("Photo error", "The photo could not be read. Please try again.");
+      reader.readAsDataURL(file);
+    };
+    picker.click();
+  };
+
+  const sendAiMessage = async () => {
+    const question = aiDraft.trim();
+    if (!question && !aiImageDataUrl) return;
+    if (!authSession || authSession.user.email?.trim().toLowerCase() !== OWNER_EMAIL) {
+      showAppMessage("Sign in required", "Please sign in with the authorised Google account.");
+      return;
+    }
+    const userText = question || "Please analyse this sapphire photo. Describe visible features and uncertainties; do not claim origin, natural status, treatment or value from the photo alone.";
+    setAiMessages((prev) => [...prev, { role: "user", text: userText + (aiImageName ? "\\n[Photo attached: " + aiImageName + "]" : "") }]);
+    setAiDraft("");
+    setAiBusy(true);
+    const image = aiImageDataUrl;
+    setAiImageDataUrl("");
+    setAiImageName("");
+    try {
+      const { data, error } = await supabase.functions.invoke("raka-ai-assistant", {
+        body: { message: userText, image_data_url: image || undefined }
+      });
+      if (error) throw new Error(error.message || "AI request failed.");
+      const answer = typeof data?.answer === "string" ? data.answer : "";
+      if (!answer) throw new Error(data?.error || "The AI service returned no answer.");
+      setAiMessages((prev) => [...prev, { role: "assistant", text: answer }]);
+    } catch (error) {
+      setAiMessages((prev) => [...prev, { role: "assistant", text: "NOT COMPLETED: " + (error instanceof Error ? error.message : "AI service unavailable.") + " No business records were changed. Check that the AI function is deployed and its server-side API key is configured." }]);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const aiCalc = (() => {
+    const buy = Number(aiPurchase), sale = Number(aiSale), costs = Number(aiCosts || "0"), weight = Number(aiWeight), target = Number(aiTargetPct || "0");
+    if (!(buy > 0) || !(sale > 0) || !(weight > 0) || !Number.isFinite(costs) || costs < 0 || !Number.isFinite(target) || target < 0) return null;
+    const totalCost = buy + costs;
+    const profit = sale - totalCost;
+    return { totalCost, profit, margin: sale > 0 ? profit / sale * 100 : 0, returnPct: totalCost > 0 ? profit / totalCost * 100 : 0, buyCeiling: sale / (1 + target / 100) - costs, buyPerCt: buy / weight, salePerCt: sale / weight };
+  })();
 
   const chooseAndUploadMedia = () => {
     if (!authSession || authSession.user.email?.trim().toLowerCase() !== OWNER_EMAIL) {
@@ -383,7 +467,8 @@ export default function App() {
   const screenTitle = tab === "Home" ? "Your trading desk" :
     tab === "Stones" ? "Stone inventory" :
     tab === "Add" ? "Capture a transaction" :
-    tab === "Value Add" ? "Value Addition" : "Accounts";
+    tab === "Value Add" ? "Value Addition" :
+    tab === "AI Assistant" ? "Raka Gems AI assistant" : "Accounts";
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -540,6 +625,56 @@ export default function App() {
               <TouchableOpacity style={styles.primaryButton} onPress={chooseAndUploadMedia} disabled={mediaUploading}><Text style={styles.primaryButtonText}>{mediaUploading ? "Uploading securely…" : "Choose photo or video  →"}</Text></TouchableOpacity>
               {mediaUploadStatus ? <Text accessibilityRole="alert" style={{ color: mediaUploadStatus.startsWith("UPLOADED AND VERIFIED") ? "#16794b" : mediaUploadStatus.startsWith("PARTIAL") ? "#946D2D" : "#b42318", marginTop: 12, fontSize: 12, lineHeight: 18 }}>{mediaUploadStatus}</Text> : null}
               <Text style={styles.disclaimer}>Private storage + metadata only. Airtable attachment linking is not enabled yet.</Text>
+            </View>
+          </>
+        ) : null}
+
+        {tab === "AI Assistant" ? (
+          <>
+            <View style={styles.formCard}>
+              <Text style={styles.formIntro}>Ask about your actual Airtable inventory and transaction records, discuss a buying decision, or analyse a gemstone photo. Answers are advisory and read-only.</Text>
+              {!authSession ? <Text style={styles.disclaimer}>Sign in first to use the assistant.</Text> : null}
+              <View style={{ gap: 10, marginBottom: 14 }}>
+                {aiMessages.map((item, index) => (
+                  <View key={index} style={{ alignSelf: item.role === "user" ? "flex-end" : "stretch", maxWidth: "96%", backgroundColor: item.role === "user" ? colors.greenLight : "#F4F6F2", borderRadius: 13, borderWidth: 1, borderColor: colors.line, padding: 12 }}>
+                    <Text style={{ color: colors.inkSoft, fontSize: 9, fontWeight: "800", marginBottom: 5 }}>{item.role === "user" ? "YOU" : "RAKA AI · ADVISORY"}</Text>
+                    <Text selectable style={{ color: colors.ink, fontSize: 13, lineHeight: 19 }}>{item.text}</Text>
+                  </View>
+                ))}
+              </View>
+              {aiImageName ? <Text style={styles.disclaimer}>Photo ready: {aiImageName}</Text> : null}
+              <TextInput value={aiDraft} onChangeText={setAiDraft} multiline placeholder="e.g. What do we know about RG-20261014-001? Or assess this buying opportunity…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} editable={!aiBusy} />
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={chooseAiPhoto} disabled={aiBusy}><Text style={styles.secondaryButtonText}>＋ Add gemstone photo</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.primaryButton} onPress={sendAiMessage} disabled={aiBusy || (!aiDraft.trim() && !aiImageDataUrl) || !authSession}><Text style={styles.primaryButtonText}>{aiBusy ? "Analysing…" : "Ask Raka AI  →"}</Text></TouchableOpacity>
+              </View>
+              <Text style={styles.disclaimer}>Photo analysis cannot authenticate a sapphire, determine treatment or origin, or certify market value. Confirm important decisions with proper gemological testing and market evidence.</Text>
+            </View>
+            <View style={styles.formCard}>
+              <Text style={styles.sectionTitle}>Buying & profit calculator</Text>
+              <Text style={styles.formIntro}>Calculations use only the numbers you enter here; nothing is saved.</Text>
+              <Text style={styles.fieldLabel}>PURCHASE PRICE (LKR)</Text>
+              <TextInput value={aiPurchase} onChangeText={setAiPurchase} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>EXPECTED SALE PRICE (LKR)</Text>
+              <TextInput value={aiSale} onChangeText={setAiSale} keyboardType="decimal-pad" placeholder="e.g. 3200000" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>ADDITIONAL COSTS (LKR)</Text>
+              <TextInput value={aiCosts} onChangeText={setAiCosts} keyboardType="decimal-pad" placeholder="Heating, cutting, travel, broker fees…" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>WEIGHT (CT)</Text>
+              <TextInput value={aiWeight} onChangeText={setAiWeight} keyboardType="decimal-pad" placeholder="e.g. 22" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>TARGET RETURN ON TOTAL COST (%)</Text>
+              <TextInput value={aiTargetPct} onChangeText={setAiTargetPct} keyboardType="decimal-pad" placeholder="100" placeholderTextColor={colors.muted} style={styles.input} />
+              {aiCalc ? (
+                <View style={{ backgroundColor: colors.greenLight, borderRadius: 12, padding: 14, gap: 7 }}>
+                  <Text style={styles.sectionTitle}>Calculation · LKR</Text>
+                  <Text style={styles.noticeBody}>Total cost: {Math.round(aiCalc.totalCost).toLocaleString("en-LK")}</Text>
+                  <Text style={styles.noticeBody}>Estimated profit: {Math.round(aiCalc.profit).toLocaleString("en-LK")}</Text>
+                  <Text style={styles.noticeBody}>Return on cost: {aiCalc.returnPct.toFixed(1)}% · Margin on sale: {aiCalc.margin.toFixed(1)}%</Text>
+                  <Text style={styles.noticeBody}>Purchase ceiling for {aiTargetPct || "0"}% target return: {Math.round(aiCalc.buyCeiling).toLocaleString("en-LK")}</Text>
+                  <Text style={styles.noticeBody}>Buy / ct: {Math.round(aiCalc.buyPerCt).toLocaleString("en-LK")} · Sale / ct: {Math.round(aiCalc.salePerCt).toLocaleString("en-LK")}</Text>
+                  {aiCalc.buyCeiling < 0 ? <Text style={{ color: colors.danger, fontSize: 11 }}>Target cannot be met even with a zero purchase price at these costs.</Text> : null}
+                </View>
+              ) : <Text style={styles.disclaimer}>Enter a positive purchase price, expected sale price and carat weight to calculate the estimate.</Text>}
+              <Text style={styles.disclaimer}>Estimates exclude any unentered costs, taxes, delays, uncertain sale prices and risk of unsold stock. A model estimate is not a valuation.</Text>
             </View>
           </>
         ) : null}
