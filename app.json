@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "TradePilot AI",
+    "slug": "tradepilot-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.rakagems.tradepilotai",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.rakagems.tradepilotai"
+    },
+    "plugins": [],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
