@@ -73,7 +73,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.topbar}>
         <View style={styles.brandMark}><Text style={styles.brandMarkText}>T</Text></View>
         <View style={styles.brandCopy}>
