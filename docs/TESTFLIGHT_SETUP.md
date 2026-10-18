@@ -16,6 +16,7 @@ Open the repository's **Settings → Secrets and variables → Actions → New r
 
 Required for cloud builds:
 - `EXPO_TOKEN`: an Expo access token created from the Expo account that owns the EAS project.
+- `EAS_PROJECT_ID`: the UUID of the EAS project for TradePilot AI. Create or link the project using the Expo account first; do not guess this ID.
 
 Required for automated TestFlight submission:
 - `APPLE_ID`: the Apple account email authorised for App Store Connect.
