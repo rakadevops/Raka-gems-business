@@ -19,6 +19,9 @@ const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
 );
 
+const OWNER_EMAIL = "rahulkarunathilake4@gmail.com";
+
+
 type Tab = "Home" | "Stones" | "Add" | "Value Add" | "Accounts";
 
 const NAV: { key: Tab; icon: string }[] = [
@@ -68,11 +71,48 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setAuthSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthSession(session);
+    let active = true;
+
+    const validateOwnerSession = async (session: Session | null) => {
+      if (!session) {
+        if (active) setAuthSession(null);
+        return;
+      }
+
+      // Validate the access token with Supabase Auth instead of trusting
+      // an email value stored in the browser session.
+      const { data, error } = await supabase.auth.getUser(session.access_token);
+      const verifiedEmail = data.user?.email?.trim().toLowerCase();
+      if (error || !data.user || verifiedEmail !== OWNER_EMAIL) {
+        if (active) setAuthSession(null);
+        await supabase.auth.signOut();
+        return;
+      }
+      if (active) setAuthSession(session);
+    };
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        if (active) setAuthSession(null);
+        return;
+      }
+      void validateOwnerSession(data.session);
     });
-    return () => subscription.unsubscribe();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setAuthSession(null);
+        return;
+      }
+      // Keep the UI locked while the token and owner identity are checked.
+      setAuthSession(null);
+      Promise.resolve().then(() => validateOwnerSession(session));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithGoogle = async () => {
@@ -81,7 +121,7 @@ export default function App() {
       const redirectTo = typeof window !== "undefined" ? window.location.href.split(/[?#]/)[0] : undefined;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo }
+        options: { redirectTo, queryParams: { prompt: "select_account" } }
       });
       if (error) Alert.alert("Google sign-in unavailable", error.message);
     } catch (error) {
