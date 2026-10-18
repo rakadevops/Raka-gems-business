@@ -12,9 +12,14 @@
     "android": {
       "package": "com.rakagems.tradepilotai"
     },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
     "plugins": [],
     "experiments": {
-      "typedRoutes": false
+      "typedRoutes": false,
+      "baseUrl": "/Raka-gems-business"
     }
   }
 }
