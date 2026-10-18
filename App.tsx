@@ -163,6 +163,85 @@ export default function App() {
   const [valuePaid, setValuePaid] = useState<"Unpaid" | "Part paid" | "Paid">("Unpaid");
   const [valueNote, setValueNote] = useState("");
 
+  const [mediaStoneId, setMediaStoneId] = useState("");
+  const [mediaCaption, setMediaCaption] = useState("");
+  const [mediaUploadStatus, setMediaUploadStatus] = useState("");
+  const [mediaUploading, setMediaUploading] = useState(false);
+
+  const chooseAndUploadMedia = () => {
+    if (!authSession || authSession.user.email?.trim().toLowerCase() !== OWNER_EMAIL) {
+      setMediaUploadStatus("NOT UPLOADED: Sign in with the authorised Google account first.");
+      return;
+    }
+    const stone = mediaStoneId.trim();
+    if (!stone) {
+      setMediaUploadStatus("Enter the exact Stone ID before choosing a file.");
+      return;
+    }
+    if (typeof document === "undefined") {
+      setMediaUploadStatus("Open the Raka Gems web app in Safari to choose a file.");
+      return;
+    }
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm";
+    picker.onchange = () => {
+      const file = picker.files && picker.files[0];
+      if (!file) return;
+      void (async () => {
+        setMediaUploading(true);
+        setMediaUploadStatus("Checking stone and uploading to private storage…");
+        try {
+          if (file.size <= 0 || file.size > 100 * 1024 * 1024) {
+            setMediaUploadStatus("NOT UPLOADED: Choose a non-empty file under 100 MiB.");
+            return;
+          }
+          const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "video/mp4", "video/quicktime", "video/webm"];
+          if (!allowed.includes(file.type)) {
+            setMediaUploadStatus("NOT UPLOADED: Choose a supported photo or video.");
+            return;
+          }
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError || userData.user?.email?.trim().toLowerCase() !== OWNER_EMAIL) {
+            setMediaUploadStatus("NOT UPLOADED: Owner session could not be verified. Sign in again.");
+            return;
+          }
+          const safeStone = stone.replace(/[^a-zA-Z0-9_-]/g, "_");
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "media";
+          const idem = "MEDIA-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14);
+          const path = safeStone + "/" + new Date().toISOString().slice(0, 10) + "/" + idem + "-" + safeName;
+          const { error: uploadError } = await supabase.storage.from("raka-gems-media").upload(path, file, { contentType: file.type, upsert: false, cacheControl: "3600" });
+          if (uploadError) {
+            setMediaUploadStatus("NOT UPLOADED: Storage rejected the file. " + uploadError.message);
+            return;
+          }
+          const { error: metadataError } = await supabase.from("raka_stone_media").insert({
+            stone_id: stone,
+            storage_bucket: "raka-gems-media",
+            storage_path: path,
+            original_filename: file.name,
+            mime_type: file.type,
+            size_bytes: file.size,
+            media_kind: file.type.startsWith("image/") ? "image" : "video",
+            caption: mediaCaption.trim() || null,
+            idempotency_key: idem,
+          });
+          if (metadataError) {
+            setMediaUploadStatus("PARTIAL: File uploaded to private storage, but metadata was not saved. Do not retry until checked. " + metadataError.message);
+            return;
+          }
+          setMediaUploadStatus("UPLOADED AND VERIFIED in private Supabase Storage with metadata. Airtable attachment is NOT yet linked; the file remains private.");
+          setMediaCaption("");
+        } catch (error) {
+          setMediaUploadStatus("UPLOAD NOT CONFIRMED: " + (error instanceof Error ? error.message : String(error)));
+        } finally {
+          setMediaUploading(false);
+        }
+      })();
+    };
+    picker.click();
+  };
+
   const previewOnly = () => Alert.alert(
     "Connection status",
     "Purchases and payments are configured to use the secure finance intake, but only report success after Airtable read-back verification. Sales, expenses, processing costs, and media uploads are still preview-only. If you see this message while trying to save a purchase or payment, update/reload the deployed app and check GitHub Actions deployment status; do not assume the record was saved."
@@ -451,6 +530,17 @@ export default function App() {
               <Text style={styles.disclaimer}>Processing-cost saving is not connected yet; this form is review-only.</Text>
             </View>
             <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Cost history appears here</Text><Text style={styles.emptyBody}>The connected version will show date, amount, provider, receipt, payment status and linked stone ID.</Text></View>
+            <View style={styles.formCard}>
+              <Text style={styles.sectionTitle}>Stone photo / video upload</Text>
+              <Text style={styles.formIntro}>Upload from your iPhone to private Supabase Storage. Use the exact Stone ID.</Text>
+              <Text style={styles.fieldLabel}>STONE ID (REQUIRED)</Text>
+              <TextInput value={mediaStoneId} onChangeText={setMediaStoneId} placeholder="e.g. RG-20261014-001" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="characters" />
+              <Text style={styles.fieldLabel}>CAPTION (OPTIONAL)</Text>
+              <TextInput value={mediaCaption} onChangeText={setMediaCaption} placeholder="Rough stone, before heating…" placeholderTextColor={colors.muted} style={styles.input} />
+              <TouchableOpacity style={styles.primaryButton} onPress={chooseAndUploadMedia} disabled={mediaUploading}><Text style={styles.primaryButtonText}>{mediaUploading ? "Uploading securely…" : "Choose photo or video  →"}</Text></TouchableOpacity>
+              {mediaUploadStatus ? <Text accessibilityRole="alert" style={{ color: mediaUploadStatus.startsWith("UPLOADED AND VERIFIED") ? "#16794b" : mediaUploadStatus.startsWith("PARTIAL") ? "#946D2D" : "#b42318", marginTop: 12, fontSize: 12, lineHeight: 18 }}>{mediaUploadStatus}</Text> : null}
+              <Text style={styles.disclaimer}>Private storage + metadata only. Airtable attachment linking is not enabled yet.</Text>
+            </View>
           </>
         ) : null}
 
