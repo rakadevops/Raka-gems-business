@@ -21,6 +21,14 @@ const supabase = createClient(
 
 const OWNER_EMAIL = "rahulkarunathilake4@gmail.com";
 
+const showAppMessage = (title: string, message: string) => {
+  if (typeof window !== "undefined" && typeof window.alert === "function") {
+    window.alert(title + "\\n\\n" + message);
+    return;
+  }
+  Alert.alert(title, message);
+};
+
 
 type Tab = "Home" | "Stones" | "Add" | "Value Add" | "Accounts";
 
@@ -161,11 +169,11 @@ export default function App() {
 
   const saveTransaction = async () => {
     if (!authSession || authSession.user.email?.trim().toLowerCase() !== "rahulkarunathilake4@gmail.com") {
-      Alert.alert("Owner sign-in required", "Sign in with the authorised Google account before saving.");
+      showAppMessage("Owner sign-in required", "Sign in with the authorised Google account before saving.");
       return;
     }
     if (transactionType !== "Purchase" && transactionType !== "Payment") {
-      Alert.alert("Not enabled yet", "Real saving is currently enabled only for purchases and payments. Sales and expenses remain preview-only until their additional payment fields are connected.");
+      showAppMessage("Not enabled yet", "Real saving is currently enabled only for purchases and payments. Sales and expenses remain preview-only until their additional payment fields are connected.");
       return;
     }
     const key = pendingTransactionKey || ("TP-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14));
@@ -187,11 +195,11 @@ export default function App() {
       };
       const { data, error } = await supabase.functions.invoke("raka-finance-intake", { body: payload });
       if (error) {
-        Alert.alert("Save not verified", "The server did not confirm a verified save. Your submission key has been retained to reduce duplicate risk. Check the Transaction Intake table before retrying. Details: " + error.message);
+        showAppMessage("Save not verified", "The server did not confirm a verified save. Your submission key has been retained to reduce duplicate risk. Check the Transaction Intake table before retrying. Details: " + error.message);
         return;
       }
       if (data?.success === true && data?.status === "Written and Verified") {
-        Alert.alert("Saved and verified", "Transaction: " + data.type + "\nIntake ID: " + data.intake_id + "\nBusiness record: " + data.record_id + "\n\nAirtable read-back matched the unique transaction key.");
+        showAppMessage("Saved and verified", "Transaction: " + data.type + "\nIntake ID: " + data.intake_id + "\nBusiness record: " + data.record_id + "\n\nAirtable read-back matched the unique transaction key.");
         setPendingTransactionKey("");
         setPurchasePrice("");
         setStoneWeight("");
@@ -201,10 +209,10 @@ export default function App() {
         setStoneId("");
         setNote("");
       } else {
-        Alert.alert("Needs review — not confirmed as saved", String(data?.message || data?.error || "The intake may be in recovery. Do not submit this transaction with a new key." ) + (data?.intake_id ? "\nIntake ID: " + data.intake_id : ""));
+        showAppMessage("Needs review — not confirmed as saved", String(data?.message || data?.error || "The intake may be in recovery. Do not submit this transaction with a new key." ) + (data?.intake_id ? "\nIntake ID: " + data.intake_id : ""));
       }
     } catch (error) {
-      Alert.alert("Save not verified", "No successful save is claimed. Keep this transaction unchanged and inspect Transaction Intake before retrying. " + (error instanceof Error ? error.message : ""));
+      showAppMessage("Save not verified", "No successful save is claimed. Keep this transaction unchanged and inspect Transaction Intake before retrying. " + (error instanceof Error ? error.message : ""));
     } finally {
       setSavingTransaction(false);
     }
