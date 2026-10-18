@@ -69,6 +69,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Home");
   const [authSession, setAuthSession] = useState<Session | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [savingTransaction, setSavingTransaction] = useState(false);
+  const [pendingTransactionKey, setPendingTransactionKey] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -157,6 +159,57 @@ export default function App() {
     "This is a local preview only. Nothing is saved to Supabase or Airtable. Secure sign-in, server-side validation and read-back verification must be connected before this entry can be recorded."
   );
 
+  const saveTransaction = async () => {
+    if (!authSession || authSession.user.email?.trim().toLowerCase() !== "rahulkarunathilake4@gmail.com") {
+      Alert.alert("Owner sign-in required", "Sign in with the authorised Google account before saving.");
+      return;
+    }
+    if (transactionType !== "Purchase" && transactionType !== "Payment") {
+      Alert.alert("Not enabled yet", "Real saving is currently enabled only for purchases and payments. Sales and expenses remain preview-only until their additional payment fields are connected.");
+      return;
+    }
+    const key = pendingTransactionKey || ("TP-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14));
+    setPendingTransactionKey(key);
+    setSavingTransaction(true);
+    try {
+      const payload = {
+        type: transactionType,
+        idempotency_key: key,
+        counterparty: supplier.trim(),
+        description: stoneDescription.trim() || (transactionType === "Payment" ? "Payment" : ""),
+        colour: stoneColour.trim(),
+        stone_id: stoneId.trim() || (transactionType === "Purchase" ? ("RG-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + key.slice(-6).toUpperCase()) : ""),
+        weight: transactionType === "Purchase" ? Number(stoneWeight) : undefined,
+        amount: Number(purchasePrice),
+        payment_direction: transactionType === "Payment" ? paymentDirection : undefined,
+        payment_method: transactionType === "Payment" ? paymentMethod : undefined,
+        notes: note.trim(),
+      };
+      const { data, error } = await supabase.functions.invoke("raka-finance-intake", { body: payload });
+      if (error) {
+        Alert.alert("Save not verified", "The server did not confirm a verified save. Your submission key has been retained to reduce duplicate risk. Check the Transaction Intake table before retrying. Details: " + error.message);
+        return;
+      }
+      if (data?.success === true && data?.status === "Written and Verified") {
+        Alert.alert("Saved and verified", "Transaction: " + data.type + "\nIntake ID: " + data.intake_id + "\nBusiness record: " + data.record_id + "\n\nAirtable read-back matched the unique transaction key.");
+        setPendingTransactionKey("");
+        setPurchasePrice("");
+        setStoneWeight("");
+        setSupplier("");
+        setStoneDescription("");
+        setStoneColour("");
+        setStoneId("");
+        setNote("");
+      } else {
+        Alert.alert("Needs review — not confirmed as saved", String(data?.message || data?.error || "The intake may be in recovery. Do not submit this transaction with a new key." ) + (data?.intake_id ? "\nIntake ID: " + data.intake_id : ""));
+      }
+    } catch (error) {
+      Alert.alert("Save not verified", "No successful save is claimed. Keep this transaction unchanged and inspect Transaction Intake before retrying. " + (error instanceof Error ? error.message : ""));
+    } finally {
+      setSavingTransaction(false);
+    }
+  };
+
   const reviewTransaction = () => {
     const validation = validateTransactionDraft({
       type: transactionType,
@@ -174,7 +227,7 @@ export default function App() {
     const details = [
       "Type: " + transactionType,
       "Counterparty: " + supplier.trim(),
-      stoneId.trim() ? "Stone ID: " + stoneId.trim() : "",
+      stoneId.trim() ? "Stone ID: " + stoneId.trim() : (transactionType === "Purchase" ? "Stone ID: generated when saved" : ""),
       stoneDescription.trim() ? "Stone: " + stoneDescription.trim() : "",
       stoneColour.trim() ? "Colour: " + stoneColour.trim() : "",
       transactionType === "Purchase" && stoneWeight.trim() ? "Weight: " + stoneWeight + " ct" : "",
@@ -183,11 +236,13 @@ export default function App() {
       "Amount: LKR " + Number(purchasePrice).toLocaleString("en-LK"),
       note.trim() ? "Notes: " + note.trim() : "",
       "",
-      "PREVIEW ONLY — not saved to any database."
+      transactionType === "Purchase" || transactionType === "Payment"
+        ? "Will be saved to Airtable only after you confirm. The app reports success only after read-back verification."
+        : "PREVIEW ONLY — sale/expense saving is not enabled yet."
     ].filter(Boolean).join("\n");
     Alert.alert("Review transaction", details, [
       { text: "Edit", style: "cancel" },
-      { text: "Close", onPress: previewOnly }
+      { text: transactionType === "Purchase" || transactionType === "Payment" ? (savingTransaction ? "Saving…" : "Save to Raka Gems") : "Close", onPress: transactionType === "Purchase" || transactionType === "Payment" ? saveTransaction : previewOnly, style: "default" }
     ]);
   };
 
@@ -341,7 +396,7 @@ export default function App() {
             <TextInput value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
-            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction}><Text style={styles.primaryButtonText}>Review transaction  →</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : "Review transaction  →"}</Text></TouchableOpacity>
             <Text style={styles.disclaimer}>Preview only. No financial record is saved in this build.</Text>
           </View>
         ) : null}
