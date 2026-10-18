@@ -79,6 +79,7 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [savingTransaction, setSavingTransaction] = useState(false);
   const [pendingTransactionKey, setPendingTransactionKey] = useState("");
+  const [transactionSaveStatus, setTransactionSaveStatus] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -169,15 +170,16 @@ export default function App() {
 
   const saveTransaction = async () => {
     if (!authSession || authSession.user.email?.trim().toLowerCase() !== "rahulkarunathilake4@gmail.com") {
-      showAppMessage("Owner sign-in required", "Sign in with the authorised Google account before saving.");
+      setTransactionSaveStatus("NOT SAVED: Sign in with the authorised Google account first.");
       return;
     }
     if (transactionType !== "Purchase" && transactionType !== "Payment") {
-      showAppMessage("Not enabled yet", "Real saving is currently enabled only for purchases and payments. Sales and expenses remain preview-only until their additional payment fields are connected.");
+      setTransactionSaveStatus("PREVIEW ONLY: Sales and expenses are not connected to real saving yet.");
       return;
     }
     const key = pendingTransactionKey || ("TP-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14));
     setPendingTransactionKey(key);
+    setTransactionSaveStatus("Submitting to the secure finance service…");
     setSavingTransaction(true);
     try {
       const payload = {
@@ -195,7 +197,7 @@ export default function App() {
       };
       const { data, error } = await supabase.functions.invoke("raka-finance-intake", { body: payload });
       if (error) {
-        showAppMessage("Save not verified", "The server did not confirm a verified save. Your submission key has been retained to reduce duplicate risk. Check the Transaction Intake table before retrying. Details: " + error.message);
+        setTransactionSaveStatus("NOT VERIFIED — no success confirmed. Keep this entry unchanged and check Transaction Intake before retrying. " + error.message);
         return;
       }
       if (data?.success === true && data?.status === "Written and Verified") {
@@ -212,7 +214,7 @@ export default function App() {
         showAppMessage("Needs review — not confirmed as saved", String(data?.message || data?.error || "The intake may be in recovery. Do not submit this transaction with a new key." ) + (data?.intake_id ? "\nIntake ID: " + data.intake_id : ""));
       }
     } catch (error) {
-      showAppMessage("Save not verified", "No successful save is claimed. Keep this transaction unchanged and inspect Transaction Intake before retrying. " + (error instanceof Error ? error.message : ""));
+      setTransactionSaveStatus("SAVE ERROR — not confirmed. Check Transaction Intake before retrying. " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setSavingTransaction(false);
     }
@@ -414,7 +416,8 @@ export default function App() {
             <TextInput value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
-            <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : (transactionType === "Purchase" || transactionType === "Payment" ? "Review & Save transaction  →" : "Review transaction  →")}</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={(transactionType === "Purchase" || transactionType === "Payment") ? saveTransaction : reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : (transactionType === "Purchase" || transactionType === "Payment" ? "Save transaction to Raka Gems  →" : "Review transaction  →")}</Text></TouchableOpacity>
+            {transactionSaveStatus ? <Text accessibilityRole="alert" style={{ color: transactionSaveStatus.startsWith("SAVED AND VERIFIED") ? "#16794b" : transactionSaveStatus.startsWith("Submitting") ? "#555555" : "#b42318", marginTop: 10, fontSize: 14 }}>{transactionSaveStatus}</Text> : null}
             <Text style={styles.disclaimer}>Purchases and payments can be saved to Airtable after review. Sales and expenses remain disabled.</Text>
           </View>
         ) : null}
