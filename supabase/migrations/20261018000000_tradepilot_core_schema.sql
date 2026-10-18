@@ -175,6 +175,7 @@ create table if not exists public.tp_media_assets (
   created_at timestamptz not null default now(),
   unique (bucket_id, storage_path),
   unique (organization_id, idempotency_key),
+  unique (organization_id, id),
   foreign key (organization_id, stone_id)
     references public.tp_stones(organization_id, id) on delete restrict,
   foreign key (organization_id, transaction_id)
@@ -244,6 +245,12 @@ $$;
 
 revoke all on function public.tp_user_can_access_org(uuid) from public, anon;
 grant execute on function public.tp_user_can_access_org(uuid) to authenticated;
+
+-- Remove any default API grants first; expose only the read access explicitly granted below.
+revoke all on public.tp_organizations, public.tp_organization_members, public.tp_counterparties,
+  public.tp_stones, public.tp_transactions, public.tp_transaction_lines, public.tp_value_additions,
+  public.tp_payments, public.tp_payment_allocations, public.tp_media_assets, public.tp_ai_ingestion_jobs,
+  public.tp_audit_events from anon, authenticated;
 
 -- Enable RLS on every tenant-owned table. Policies only grant access to members.
 do $$
