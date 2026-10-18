@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { createClient, type Session } from "@supabase/supabase-js";
 import { validateTransactionDraft } from "./src/transactionValidation.cjs";
 import {
   Alert,
@@ -11,6 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+const supabase = createClient(
+  "https://husoqhevdwwirzbgjaex.supabase.co",
+  "sb_publishable_mTRgRKDsUwXEMeUe0bJKbg_qAOP1bzL",
+  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+);
 
 type Tab = "Home" | "Stones" | "Add" | "Value Add" | "Accounts";
 
@@ -57,6 +64,37 @@ function SectionTitle({ title, action }: { title: string; action?: string }) {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Home");
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAuthSession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signInWithGoogle = async () => {
+    setAuthBusy(true);
+    try {
+      const redirectTo = typeof window !== "undefined" ? window.location.href.split(/[?#]/)[0] : undefined;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo }
+      });
+      if (error) Alert.alert("Google sign-in unavailable", error.message);
+    } catch (error) {
+      Alert.alert("Sign-in failed", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) Alert.alert("Could not sign out", error.message);
+  };
   const [note, setNote] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [stoneWeight, setStoneWeight] = useState("");
@@ -153,7 +191,15 @@ export default function App() {
           <Text style={styles.brandName}>TradePilot <Text style={styles.brandAI}>AI</Text></Text>
           <Text style={styles.brandSub}>RAKA GEMS WORKSPACE</Text>
         </View>
-        <View style={styles.avatar}><Text style={styles.avatarText}>RG</Text></View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={authSession ? "Sign out" : "Continue with Google"}
+          style={styles.loginButton}
+          onPress={authSession ? signOut : signInWithGoogle}
+          disabled={authBusy}
+        >
+          <Text style={styles.loginButtonText}>{authBusy ? "Opening…" : authSession ? "Sign out" : "G  Sign in"}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
@@ -168,8 +214,8 @@ export default function App() {
         <View style={styles.notice}>
           <Text style={styles.noticeIcon}>ⓘ</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.noticeTitle}>Secure connection not yet enabled</Text>
-            <Text style={styles.noticeBody}>This scaffold does not save to Supabase or Airtable. No transaction entered here is recorded.</Text>
+            <Text style={styles.noticeTitle}>{authSession ? "Signed in — data saving still pending" : "Sign in with Google"}</Text>
+            <Text style={styles.noticeBody}>{authSession ? `Signed in as ${authSession.user.email || "Google account"}. Inventory and financial writes remain disabled until the secure save workflow is connected.` : "Use your Google account to sign in. Inventory and financial records are not saved by this preview yet."}</Text>
           </View>
         </View>
 
@@ -318,8 +364,8 @@ const styles = StyleSheet.create({
   brandName: { fontSize: 18, color: colors.ink, fontWeight: "800", letterSpacing: -0.4 },
   brandAI: { color: colors.gold },
   brandSub: { marginTop: 2, fontSize: 9, color: colors.inkSoft, letterSpacing: 1.5, fontWeight: "700" },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.greenLight, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 11, fontWeight: "800", color: colors.green },
+  loginButton: { minHeight: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  loginButtonText: { fontSize: 11, fontWeight: "800", color: colors.green },
   page: { padding: 18, paddingBottom: 28 },
   headingRow: { flexDirection: "row", alignItems: "center", marginBottom: 16, gap: 8 },
   eyebrow: { color: colors.green, fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginBottom: 5 },
