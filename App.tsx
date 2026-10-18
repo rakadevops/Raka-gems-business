@@ -309,8 +309,8 @@ export default function App() {
         <View style={styles.notice}>
           <Text style={styles.noticeIcon}>ⓘ</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.noticeTitle}>{authSession ? "Signed in — data saving still pending" : "Sign in with Google"}</Text>
-            <Text style={styles.noticeBody}>{authSession ? `Signed in as ${authSession.user.email || "Google account"}. Inventory and financial writes remain disabled until the secure save workflow is connected.` : "Use your Google account to sign in. Inventory and financial records are not saved by this preview yet."}</Text>
+            <Text style={styles.noticeTitle}>{authSession ? "Owner session verified" : "Sign in with Google"}</Text>
+            <Text style={styles.noticeBody}>{authSession ? `Signed in as ${authSession.user.email || "Google account"}. Purchases and payments can be saved to Airtable with server-side owner validation and read-back verification. Sales, expenses, processing costs and media remain disabled until their workflows are connected.` : "Sign in with the authorised Google account. Purchases and payments can then be submitted to Airtable; other workflows remain preview-only."}</Text>
           </View>
         </View>
 
@@ -346,7 +346,7 @@ export default function App() {
             <View style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>◷</Text>
               <Text style={styles.emptyTitle}>Activity will appear here</Text>
-              <Text style={styles.emptyBody}>Once the secure backend is connected, this area will show verified purchases, processing updates, sales and payments.</Text>
+              <Text style={styles.emptyBody}>Live inventory display is not connected yet. Purchases and payments submitted through the form are written to Airtable and read back for verification.</Text>
             </View>
           </>
         ) : null}
@@ -365,7 +365,7 @@ export default function App() {
 
         {tab === "Add" ? (
           <View style={styles.formCard}>
-            <Text style={styles.formIntro}>Start with a message or enter the basics. AI-assisted extraction will be added after secure backend access is ready.</Text>
+            <Text style={styles.formIntro}>Start with a message or enter the basics. Purchases and payments use the secure Airtable intake. AI-assisted extraction and other transaction types are not connected yet.</Text>
             <Text style={styles.fieldLabel}>TRANSACTION TYPE</Text>
             <View style={styles.typeRow}>
               {(["Purchase", "Expense", "Sale", "Payment"] as const).map((kind) => (
@@ -397,7 +397,7 @@ export default function App() {
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
             <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction} disabled={savingTransaction}><Text style={styles.primaryButtonText}>{savingTransaction ? "Saving securely…" : "Review transaction  →"}</Text></TouchableOpacity>
-            <Text style={styles.disclaimer}>Preview only. No financial record is saved in this build.</Text>
+            <Text style={styles.disclaimer}>Purchases and payments can be saved to Airtable after review. Sales and expenses remain disabled.</Text>
           </View>
         ) : null}
 
@@ -418,7 +418,7 @@ export default function App() {
               <Text style={styles.fieldLabel}>NOTES (OPTIONAL)</Text>
               <TextInput value={valueNote} onChangeText={setValueNote} multiline placeholder="Treatment details, receipt reference…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
               <TouchableOpacity style={styles.primaryButton} onPress={reviewValueAddition}><Text style={styles.primaryButtonText}>Review cost  →</Text></TouchableOpacity>
-              <Text style={styles.disclaimer}>Preview only. No cost is saved in this build.</Text>
+              <Text style={styles.disclaimer}>Processing-cost saving is not connected yet; this form is review-only.</Text>
             </View>
             <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Cost history appears here</Text><Text style={styles.emptyBody}>The connected version will show date, amount, provider, receipt, payment status and linked stone ID.</Text></View>
           </>
