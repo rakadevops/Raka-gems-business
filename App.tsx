@@ -197,7 +197,16 @@ export default function App() {
       };
       const { data, error } = await supabase.functions.invoke("raka-finance-intake", { body: payload });
       if (error) {
-        setTransactionSaveStatus("NOT VERIFIED — no success confirmed. Keep this entry unchanged and check Transaction Intake before retrying. " + error.message);
+        let detail = error.message;
+        try {
+          const response = (error as unknown as { context?: Response }).context;
+          if (response && typeof response.clone === "function") {
+            const body = await response.clone().json();
+            if (body && typeof body.error === "string") detail = body.error;
+            else if (body && typeof body.message === "string") detail = body.message;
+          }
+        } catch { /* Keep the SDK error if the response body is unavailable. */ }
+        setTransactionSaveStatus("NOT VERIFIED — no success confirmed. " + detail + ". Keep this entry unchanged and check Transaction Intake before retrying.");
         return;
       }
       if (data?.success === true && data?.status === "Written and Verified") {
