@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { validateTransactionDraft } from "./src/transactionValidation.cjs";
 import {
   Alert,
   SafeAreaView,
@@ -63,6 +64,15 @@ export default function App() {
   const [transactionType, setTransactionType] = useState<"Purchase" | "Expense" | "Sale" | "Payment">("Purchase");
   const [stoneDescription, setStoneDescription] = useState("");
   const [stoneColour, setStoneColour] = useState("");
+  const [stoneId, setStoneId] = useState("");
+  const [paymentDirection, setPaymentDirection] = useState<"Incoming" | "Outgoing">("Outgoing");
+  const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank transfer" | "Cheque" | "Other">("Cash");
+  const [valueCategory, setValueCategory] = useState<"Heating" | "Preforming" | "Faceting" | "Transport" | "Other">("Heating");
+  const [valueStoneId, setValueStoneId] = useState("");
+  const [valueProvider, setValueProvider] = useState("");
+  const [valueAmount, setValueAmount] = useState("");
+  const [valuePaid, setValuePaid] = useState<"Unpaid" | "Part paid" | "Paid">("Unpaid");
+  const [valueNote, setValueNote] = useState("");
 
   const previewOnly = () => Alert.alert(
     "Not recorded yet",
@@ -70,32 +80,60 @@ export default function App() {
   );
 
   const reviewTransaction = () => {
-    const amount = Number(purchasePrice);
-    const weight = Number(stoneWeight);
-    if (!supplier.trim()) {
-      Alert.alert("Supplier or counterparty needed", "Enter the person or business this transaction relates to.");
-      return;
-    }
-    if (!purchasePrice.trim() || !Number.isFinite(amount) || amount <= 0) {
-      Alert.alert("Check the amount", "Enter a valid amount greater than zero in LKR.");
-      return;
-    }
-    if (transactionType === "Purchase" && (!stoneWeight.trim() || !Number.isFinite(weight) || weight <= 0)) {
-      Alert.alert("Check the weight", "For a stone purchase, enter a carat weight greater than zero.");
+    const validation = validateTransactionDraft({
+      type: transactionType,
+      counterparty: supplier,
+      amount: purchasePrice,
+      weight: stoneWeight,
+      stoneId,
+      paymentDirection,
+      paymentMethod,
+    });
+    if (!validation.valid) {
+      Alert.alert("Please check the transaction", validation.errors.join("\n"));
       return;
     }
     const details = [
       "Type: " + transactionType,
       "Counterparty: " + supplier.trim(),
+      stoneId.trim() ? "Stone ID: " + stoneId.trim() : "",
       stoneDescription.trim() ? "Stone: " + stoneDescription.trim() : "",
       stoneColour.trim() ? "Colour: " + stoneColour.trim() : "",
-      stoneWeight.trim() ? "Weight: " + stoneWeight + " ct" : "",
-      "Amount: LKR " + amount.toLocaleString("en-LK"),
+      transactionType === "Purchase" && stoneWeight.trim() ? "Weight: " + stoneWeight + " ct" : "",
+      transactionType === "Payment" ? "Direction: " + paymentDirection : "",
+      transactionType === "Payment" ? "Method: " + paymentMethod : "",
+      "Amount: LKR " + Number(purchasePrice).toLocaleString("en-LK"),
       note.trim() ? "Notes: " + note.trim() : "",
       "",
       "PREVIEW ONLY — not saved to any database."
-    ].filter(Boolean).join("\\n");
+    ].filter(Boolean).join("\n");
     Alert.alert("Review transaction", details, [
+      { text: "Edit", style: "cancel" },
+      { text: "Close", onPress: previewOnly }
+    ]);
+  };
+
+  const reviewValueAddition = () => {
+    const amount = Number(valueAmount);
+    if (!valueStoneId.trim()) {
+      Alert.alert("Stone ID needed", "Link this cost to the stone it belongs to.");
+      return;
+    }
+    if (!valueAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      Alert.alert("Check the amount", "Enter a valid value-addition cost greater than zero in LKR.");
+      return;
+    }
+    const details = [
+      "Category: " + valueCategory,
+      "Stone ID: " + valueStoneId.trim(),
+      valueProvider.trim() ? "Provider: " + valueProvider.trim() : "",
+      "Cost: LKR " + amount.toLocaleString("en-LK"),
+      "Payment status: " + valuePaid,
+      valueNote.trim() ? "Notes: " + valueNote.trim() : "",
+      "",
+      "PREVIEW ONLY — not saved to any database."
+    ].filter(Boolean).join("\n");
+    Alert.alert("Review value addition", details, [
       { text: "Edit", style: "cancel" },
       { text: "Close", onPress: previewOnly }
     ]);
@@ -201,10 +239,20 @@ export default function App() {
             <TextInput value={stoneColour} onChangeText={setStoneColour} placeholder="e.g. just blue" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>SUPPLIER / COUNTERPARTY</Text>
             <TextInput value={supplier} onChangeText={setSupplier} placeholder="e.g. supplier name" placeholderTextColor={colors.muted} style={styles.input} />
-            <View style={styles.twoFields}>
-              <View style={{ flex: 1 }}><Text style={styles.fieldLabel}>WEIGHT (CT)</Text><TextInput value={stoneWeight} onChangeText={setStoneWeight} keyboardType="decimal-pad" placeholder="e.g. 22" placeholderTextColor={colors.muted} style={styles.input} /></View>
-              <View style={{ flex: 1 }}><Text style={styles.fieldLabel}>PRICE (LKR)</Text><TextInput value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} /></View>
-            </View>
+            {transactionType === "Sale" ? <>
+              <Text style={styles.fieldLabel}>STONE ID (REQUIRED FOR SALE)</Text>
+              <TextInput value={stoneId} onChangeText={setStoneId} placeholder="e.g. RG-20261014-001" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="characters" />
+            </> : null}
+            {transactionType === "Purchase" ? <Text style={styles.fieldLabel}>WEIGHT (CT)</Text> : null}
+            {transactionType === "Purchase" ? <TextInput value={stoneWeight} onChangeText={setStoneWeight} keyboardType="decimal-pad" placeholder="e.g. 22" placeholderTextColor={colors.muted} style={styles.input} /> : null}
+            {transactionType === "Payment" ? <>
+              <Text style={styles.fieldLabel}>PAYMENT DIRECTION</Text>
+              <View style={styles.typeRow}>{(["Incoming", "Outgoing"] as const).map((item) => <TouchableOpacity key={item} onPress={() => setPaymentDirection(item)}><Pill tone={paymentDirection === item ? "green" : "muted"}>{item}</Pill></TouchableOpacity>)}</View>
+              <Text style={styles.fieldLabel}>PAYMENT METHOD</Text>
+              <View style={styles.typeRow}>{(["Cash", "Bank transfer", "Cheque", "Other"] as const).map((item) => <TouchableOpacity key={item} onPress={() => setPaymentMethod(item)}><Pill tone={paymentMethod === item ? "green" : "muted"}>{item}</Pill></TouchableOpacity>)}</View>
+            </> : null}
+            <Text style={styles.fieldLabel}>AMOUNT (LKR)</Text>
+            <TextInput value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="decimal-pad" placeholder="e.g. 2200000" placeholderTextColor={colors.muted} style={styles.input} />
             <Text style={styles.fieldLabel}>VOICE / CHAT NOTES</Text>
             <TextInput value={note} onChangeText={setNote} multiline placeholder="Describe the stone or transaction…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
             <TouchableOpacity style={styles.primaryButton} onPress={reviewTransaction}><Text style={styles.primaryButtonText}>Review transaction  →</Text></TouchableOpacity>
@@ -214,14 +262,24 @@ export default function App() {
 
         {tab === "Value Add" ? (
           <>
-            <Text style={styles.introText}>Every extra cost belongs to the stone or trade it relates to, so your true cost and profit can be calculated.</Text>
-            {[
-              ["🔥", "Heating / treatment", "Gas, electric, laboratory fees"],
-              ["✧", "Preforming & faceting", "Cutting, polishing and labour"],
-              ["↔", "Transport & handling", "Courier, travel and delivery"],
-              ["＋", "Other costs", "Broker fees, repairs and extras"],
-            ].map(([icon, title, subtitle]) => <TouchableOpacity key={title} style={styles.listCard} onPress={previewOnly}><View style={styles.listIcon}><Text>{icon}</Text></View><View style={{ flex: 1 }}><Text style={styles.listTitle}>{title}</Text><Text style={styles.listSubtitle}>{subtitle}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
-            <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Cost history appears here</Text><Text style={styles.emptyBody}>When connected, each entry will keep its date, amount, payee, receipt and linked stone ID.</Text></View>
+            <Text style={styles.introText}>Record each processing or trade cost against the exact stone. Cost and payment status are separate.</Text>
+            <View style={styles.formCard}>
+              <Text style={styles.fieldLabel}>COST CATEGORY</Text>
+              <View style={styles.typeRow}>{(["Heating", "Preforming", "Faceting", "Transport", "Other"] as const).map((kind) => <TouchableOpacity key={kind} onPress={() => setValueCategory(kind)}><Pill tone={valueCategory === kind ? "green" : "muted"}>{kind}</Pill></TouchableOpacity>)}</View>
+              <Text style={styles.fieldLabel}>STONE ID (REQUIRED)</Text>
+              <TextInput value={valueStoneId} onChangeText={setValueStoneId} placeholder="e.g. RG-20261014-001" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="characters" />
+              <Text style={styles.fieldLabel}>PROCESSOR / PAYEE (OPTIONAL)</Text>
+              <TextInput value={valueProvider} onChangeText={setValueProvider} placeholder="e.g. heating workshop" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>COST (LKR)</Text>
+              <TextInput value={valueAmount} onChangeText={setValueAmount} keyboardType="decimal-pad" placeholder="e.g. 5000" placeholderTextColor={colors.muted} style={styles.input} />
+              <Text style={styles.fieldLabel}>PAYMENT STATUS</Text>
+              <View style={styles.typeRow}>{(["Unpaid", "Part paid", "Paid"] as const).map((status) => <TouchableOpacity key={status} onPress={() => setValuePaid(status)}><Pill tone={valuePaid === status ? "green" : "muted"}>{status}</Pill></TouchableOpacity>)}</View>
+              <Text style={styles.fieldLabel}>NOTES (OPTIONAL)</Text>
+              <TextInput value={valueNote} onChangeText={setValueNote} multiline placeholder="Treatment details, receipt reference…" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} />
+              <TouchableOpacity style={styles.primaryButton} onPress={reviewValueAddition}><Text style={styles.primaryButtonText}>Review cost  →</Text></TouchableOpacity>
+              <Text style={styles.disclaimer}>Preview only. No cost is saved in this build.</Text>
+            </View>
+            <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Cost history appears here</Text><Text style={styles.emptyBody}>The connected version will show date, amount, provider, receipt, payment status and linked stone ID.</Text></View>
           </>
         ) : null}
 
