@@ -59,3 +59,9 @@ Purchase -> attach image -> add value-addition cost -> record sale -> record par
 
 ## Current starting point
 Existing Supabase project: `husoqhevdwwirzbgjaex`. Existing repository: `rakadevops/Raka-gems-business`. Current media intake/sync work is not yet proven end-to-end; verify real Storage object, metadata and item attachment before treating uploads as reliable. Inspect and fix existing security policies before using the project for commercial multi-tenant data.
+
+## Cost-free continuation (2026-10-18)
+- Do not create a paid Supabase development branch. Keep the production core schema migration as a reviewed draft only; do not apply it to production.
+- Continue using GitHub Actions for code checks and implement isolated UI behaviour locally without storing real business data.
+- The Add Transaction screen now lets the user select Purchase / Expense / Sale / Payment, enter a counterparty, stone description/colour, weight, amount and notes, and review a validation summary. This is still local-only and intentionally does not save.
+- Next no-cost steps: complete UI validation and automated tests; audit the public repository and secrets history; prepare an isolated schema test using a local PostgreSQL/Supabase CLI environment if one can be run without paid cloud resources; only then implement authenticated server-side write functions.
