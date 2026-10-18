@@ -155,8 +155,8 @@ export default function App() {
   const [valueNote, setValueNote] = useState("");
 
   const previewOnly = () => Alert.alert(
-    "Not recorded yet",
-    "This is a local preview only. Nothing is saved to Supabase or Airtable. Secure sign-in, server-side validation and read-back verification must be connected before this entry can be recorded."
+    "Connection status",
+    "Purchases and payments are configured to use the secure finance intake, but only report success after Airtable read-back verification. Sales, expenses, processing costs, and media uploads are still preview-only. If you see this message while trying to save a purchase or payment, update/reload the deployed app and check GitHub Actions deployment status; do not assume the record was saved."
   );
 
   const saveTransaction = async () => {
